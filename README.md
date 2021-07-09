@@ -5,3 +5,5 @@ This repository contains all the studies and investigation where Machine Learnin
 
 Studies:
 - Classification and diagnostic prediction of cancers using gene expression profiling
+
+New projects will be added.
