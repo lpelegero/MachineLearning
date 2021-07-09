@@ -1,0 +1,315 @@
+---
+title: "Classification and diagnostic prediction of cancers using gene expression profiling"
+author: "Lorena Pelegero"
+date: "`r format(Sys.Date(),"%e de %B, %Y")`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+Artificial Neural Network
+
+```{r load_libraries, include=FALSE}
+require(knitr)
+```
+
+### **INDICE**
+
+1. [**Algoritmo Red Neuronal Artificial**](#id1)
+3. [Paso 1 – cargando los datos](#id2)
+4. [Paso 2 – explorandos los datos](#id3)
+5. [Paso 3 – entrenando el modelo](#id4)
+6. [Paso 4 – evaluando el modelo](#id5)
+7. [Paso 5 - probando el modelo](#id6)
+8. [**Discusion final**](#id7)
+9. [**Referencias**](#id8)
+  
+  
+<div class=text-justify>
+  
+
+### **Algoritmo Red Neuronal Artificial** <a name="id1"></a>
+
+**Definicion**
+
+Las redes neuronales artificiales son un modelo computacional formada por un conjunto de neuronas artificiales, conectadas entre si para transmitirse señales. La informacion de entrada atraviesa la red neuronal produciendo unos valores de salida. Consiste en simular el comportamiento de un cerebro biologico mediante miles de neuronas artificiales interconectadas que se almacenan en filas llamadas capas, formando miles de conexiones.
+
+Estos sistemas aprenden y se forman a si mismos, en lugar de ser programados de forma explicita. Para realizar este aprendizaje automatico, se intenta minimizar una funcion de perdida que evalua la red en su total. Los valores de los pesos de las neuronas se van actualizando buscando reducir el valor de la funcion de perdida. Este proceso se realiza mediante la propagacion hacia atras. El objetivo de la red neuronal es resolver los problemas de la misma manera que el cerebro humano, aunque las redes neuronales son mas abstractas. Las redes neuronales actuales suelen contener desde unos miles a unos pocos millones de unidades neuronales.
+
+
+
+**Tabla de fortalezas y debilidades**
+
+
+| **Fortalezas**    |**Debilidades**     | 
+| ------------- | :------------- |
+| - Alta precision  | -  preprocesamiento de los datos    |
+| - Tolerantes a fallos   | - Complejidad de aprendizaje    |
+| - Reconocer patrones no aprendidos | - Tiempo de aprendizaje elevado  |
+| - Aprendizaje Adaptativo      | - Dificiles de explicar
+
+
+### **CODIGO R** 
+
+
+##  Step 1 – collecting data <a name="id2"></a>
+
+Importamos los datos del archivo pcaComponents7.csv. 
+
+
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+pcaComponents <- read_csv("C:/Users/usuario/Desktop/UOC/Tercer semestre/Machine learning/PEC 2/pcaComponents7.csv")
+dim(pcaComponents)
+pcaComponents <- pcaComponents [,1:10]
+str(pcaComponents)
+dim(pcaComponents)
+head(pcaComponents)
+```
+
+Esta formado por `r nrow(pcaComponents)` observaciones y `r ncol(pcaComponents)`. Escogemos las 10 primeras componentes.
+Importamos los datos del archivo clase7.csv y indicamos el nombre de la clase de tumor
+
+```{r, warning=FALSE, message=FALSE}
+clase <- read_csv("C:/Users/usuario/Desktop/UOC/Tercer semestre/Machine learning/PEC 2/class7.csv")
+kable(table(clase$x), caption="Tabla con las diferentes clases de tumores")
+```
+
+
+## Step 2 – exploring and preparing the data <a name="id3"></a>
+
+
+Normalizamos los datos con la siguiente funcion
+
+```{r}
+normalize <- function(x) {
+return((x - min(x)) / (max(x) - min(x)))}
+
+```
+
+Aplicamos la funcion de normalizacion a cada columna de nuestra base de datos
+
+
+```{r}
+
+pca_norm <- as.data.frame(lapply(pcaComponents, normalize))
+```
+
+Para confirmar que ha funcionado miramos el minimo y el maximo de nuestros datos y lo visualizamos en un grafico boxplot
+
+```{r}
+summary(pca_norm$PC1)
+summary(pcaComponents$PC1)
+```
+
+```{r}
+par(mfrow=c(1,2))
+boxplot(pcaComponents,main='Datos sin normalizar',col='brown',cex.axis=0.4)
+abline(h=5,lwd=2)
+
+boxplot(pca_norm,main='Datos normalizados',col='brown',cex.axis=0.4)
+abline(h=5,lwd=2)
+par(mfrow=c(1,1))
+```
+
+No considero que sea necesario realizar la normalizacion de los datos debido que ya se encuentran entre el 0 y el 1.
+
+Ahora renombramos la variable X y la convertimos en factor para poder trabajar con ella
+
+
+```{r}
+
+tipoCancer <- c("ALL","AML","CLL","CML", "NoL")
+clase.c <- factor(clase$x,labels=tipoCancer)
+table(clase.c)
+
+```
+Tenemos que crear tantas variables binarias como clases tiene la variable X, en este caso 5.
+
+```{r}
+
+fulldata <- pca_norm
+
+fulldata$ALL <- clase.c=="ALL"
+fulldata$AML <- clase.c=="AML"
+fulldata$CLL <- clase.c=="CLL"
+fulldata$CML <- clase.c=="CML"
+fulldata$NoL <- clase.c=="NoL"
+str(fulldata)
+```
+
+Entrenamos el 67% de los datos y probamos el 33%
+
+```{r}
+
+set.seed(12345) 
+index <- sample(nrow(fulldata), round(0.67*nrow(fulldata)))
+pca_train <- fulldata[index,] 
+pca_test <- fulldata[-index,] 
+
+```
+
+
+Utilizamos los datos entrenados para construir el modelo neural networks y los datos test para evaluar como de bien funciona el modelo
+
+
+
+## Step 3 – training a model on the data <a name="id4"></a>
+
+Instalamos el paquete neuralnet
+
+```{r, warning=FALSE, message=FALSE}
+library(neuralnet)
+```
+
+Creamos el modelo a partir de la formula con las varibales
+
+```{r}
+
+cnam <- names(fulldata[1:10])
+(pca_model <- as.formula(paste("ALL+AML+CLL+CML+NoL ~ ",  paste(cnam, collapse= "+"))))
+
+
+```
+
+Utilizamos una sola capa de los datos entrenados
+
+```{r}
+
+set.seed(1234567)
+mydata_model <- neuralnet(pca_model, data = pca_train, hidden=1)
+
+```
+
+Vamos a visualizar el modelo en un grafico
+
+```{r}
+
+plot(mydata_model, rep = 'best')
+
+```
+
+Vamos a visualizarlo usando el paquete NeuralNetTools
+
+```{r, warning=FALSE, message=FALSE}
+library(NeuralNetTools)
+plotnet(mydata_model, prune_col = "lightblue")
+
+```
+
+Realizamos el mismo procedimiento pero con 5 nodos para tratar de mejorar el rendimiento.
+
+
+
+```{r}
+
+mydata_model5 <- neuralnet(pca_model, data = pca_train, hidden=5)
+plot(mydata_model5, rep = 'best')
+plotnet(mydata_model5, prune_col = "lightblue")
+```
+
+
+
+## Step 4 – evaluating model performance <a name="id5"></a>
+
+**Obtenemos los resultados del modelo con 1 nodo**
+
+
+```{r, warning=FALSE, message=FALSE}
+require(caret)
+model_results <- compute(mydata_model, pca_test [1:10])$net.result
+
+```
+```{r}
+
+maxidx <- function(arr) {
+  return(which(arr == max(arr)))}
+```
+```{r, warning=FALSE, message=FALSE}
+idx <- apply(model_results, 1, maxidx)
+prediction <- factor(idx,levels=c(1,2,3,4,5),labels=tipoCancer )
+res <- table(prediction, clase.c[-index])
+require(caret)
+(conf_matrix3<- confusionMatrix(res))
+```
+
+**Obtenemos los resultados con 5 nodos:**
+
+
+```{r}
+
+model_results5 <- compute(mydata_model5, pca_test [1:10])$net.result
+
+```
+```{r}
+
+maxidx <- function(arr) {
+  return(which(arr == max(arr)))}
+```
+```{r, warning=FALSE, message=FALSE}
+idx5 <- apply(model_results5, 1, maxidx)
+prediction5 <- factor(idx5,levels=c(1,2,3,4,5),labels=tipoCancer )
+res5 <- table(prediction5, clase.c[-index])
+(conf_matrix5<- confusionMatrix(res5))
+```
+
+
+
+## Step 5 - Improve the model <a name="id6"></a>
+
+
+**3-fold crossvalidation**
+
+
+```{r}
+library(nnet)
+#Particion de datos
+set.seed(1234567)
+dataset <- cbind(pca_norm, clase)
+inTrain <- createDataPartition(y=dataset$x, p=0.66666666666666667, list=FALSE)
+dim(inTrain)
+# Dataset normalizado
+data_nrm <- cbind(pca_norm[,1:10],x=dataset[,11])
+train.set <- data_nrm[inTrain,]
+test.set <- data_nrm[-inTrain,]
+train.set <- dataset[inTrain,]
+test.set <- dataset[-inTrain,]
+nrow(train.set)/nrow(test.set) 
+
+```
+
+El resultado tiene que ser alrededor de 2, por tanto, es correcto
+
+```{r}
+model <- train(x ~ ., train.set, method='nnet', trControl= trainControl(method='none'), preProcess = "range", tuneGrid= NULL, tuneLength=1 ,trace = FALSE) 
+plotnet(model)
+```
+
+
+```{r}
+summary(model)
+prediction <- predict(model, test.set[-11])
+table(prediction, test.set$x)
+```
+
+
+
+
+## Discusion final <a name="id7"></a>
+
+En el Algoritmo Red Neuronal Artificial obtenemos un resultado de accuracy del 0.35 al realizar 1 nodo pero en cambio al utilizar 5 nodos mejora hasta 0.9. Al comparar los dos modelos si se ven resultados muy similares, se suele escoger el modelo mas sencillo, pero, en este caso como observamos una diferencia considerable escogemos el segundo modelo que aunque cueste mas computacionalmente es mas preciso.
+Otro factor que obsevamos es que con 5 nodos las probabilidades se encuentran mas repartidos y por tanto, la prediccion es mas correcta.
+
+
+## Referencias <a name="id8"></a>
+
+* http://www.learnbymarketing.com/tutorials/neural-networks-in-r-tutorial/
+
+* https://es.wikipedia.org/wiki/Red_neuronal_artificial
+
+* http://rstudio-pubs-static.s3.amazonaws.com/402754_6cbdea25a79d43f4895cfd7df0a8bd07.html
+
+* https://en.wikipedia.org/wiki/Support-vector_machine
+
+
+</div>

@@ -1,0 +1,204 @@
+---
+title: Classification and diagnostic prediction of cancers using gene expression profiling
+author: "Lorena Pelegero"
+date: '`r format(Sys.Date(),"%e de %B, %Y")`'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r load_libraries, include=FALSE}
+require(knitr)
+```
+
+### **INDICE**
+1. [**Algoritmo Support Vector Machine**](#id1)
+2. [Paso 1 – cargando los datos](#id2)
+3. [Paso 2 – explorandos los datos](#id3)
+4. [Paso 3 – entrenando el modelo](#id4)
+5. [Paso 4 – evaluando el modelo](#id5)
+6. [Paso 5 - probando el modelo](#id6)
+7. [**Discusion final**](#id7)
+8. [**Referencias**](#id8)
+  
+  
+<div class=text-justify>
+
+### **Algoritmo Support Vector Machine** <a name="id1"></a>
+
+**Definicion**
+
+El algoritmo Support Vector Machine son modelos de aprendizaje supervisado con algoritmos de aprendizaje asociados que analizan datos para clasificacion y analisis de regresion. Dado un conjunto de ejemplos de entrenamiento, cada uno marcado como perteneciente a una de dos categorias, un algoritmo de entrenamiento de SVM construye un modelo que asigna nuevos ejemplos a una categoria u otra, convirtiendolo en un clasificador lineal binario no probabilistico .
+
+Cuando los datos no estan etiquetados, el aprendizaje supervisado no es posible y se requiere un enfoque de aprendizaje no supervisado , que intenta encontrar la agrupacion natural de los datos en grupos y luego asignar nuevos datos a estos grupos formados.Estos metodos estan propiamente relacionados con problemas de clasificacion y regresion. Dado un conjunto de ejemplos de entrenamiento podemos etiquetar las clases y entrenar una SVM para construir un modelo que prediga la clase de una nueva muestra. Intuitivamente, una SVM es un modelo que representa a los puntos de muestra en el espacio, separando las clases a 2 espacios lo mas amplios posibles mediante un hiperplano de separacion definido como el vector entre los 2 puntos, de las 2 clases, mas cercanos al que se llama vector soporte. Cuando las nuevas muestras se ponen en correspondencia con dicho modelo, en funcion de los espacios a los que pertenezcan, pueden ser clasificadas a una o la otra clase.
+
+
+
+**Tabla de fortalezas y debilidades**
+
+
+| **Fortalezas**    |**Debilidades**     | 
+| ------------- | :------------- |
+| - Versatil   | - No adecuadas en grandes conjuntos    |
+| - Eficiente en memoria  | -  No proporcionan directamente estimaciones de probabilidad   |
+| - Buena precision | - No eficientes computacionalmente  |
+| - Sencillez de los modelos     | 
+
+
+### **CODIGO R** 
+
+
+##  Step 1 – collecting data <a name="id2"></a>
+
+
+Importamos los datos del archivo pcaComponents7.csv. 
+
+
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+data7 <- read_csv("C:/Users/usuario/Desktop/UOC/Tercer semestre/Machine learning/PEC 2/data7.csv")
+dim(data7)
+```
+
+Importamos los datos del archivo clase7.csv y indicamos el nombre de la clase de tumor
+
+```{r, warning=FALSE, message=FALSE}
+clase <- read_csv("C:/Users/usuario/Desktop/UOC/Tercer semestre/Machine learning/PEC 2/class7.csv")
+kable(table(clase$x), caption="Tabla con las diferentes clases de tumores")
+```
+
+Ahora renombramos la variable X y la convertimos en factor para poder trabajar con ella
+
+
+```{r}
+
+tipoCancer <- c("ALL","AML","CLL","CML", "NoL")
+clase.c <- factor(clase$x,labels=tipoCancer)
+table(clase.c)
+
+```
+
+## Step 2 – exploring and preparing the data <a name="id3"></a>
+
+
+Normalizamos los datos con la siguiente funcion
+
+```{r}
+normalize <- function(x) {
+return((x - min(x)) / (max(x) - min(x)))}
+
+```
+Aplicamos la funcion de normalizacion a cada columna de nuestra base de datos
+
+```{r}
+pca_norm2 <- as.data.frame(lapply(data7, normalize))
+```
+
+Para confirmar que ha funcionado miramos el minimo y el maximo de nuestros datos y lo visualizamos en un grafico boxplot
+
+```{r}
+summary(pca_norm2$ENSG00000001629)
+summary(data7$ENSG00000001629)
+```
+
+```{r}
+par(mfrow=c(1,2))
+boxplot(data7,main='Datos sin normalizar',col='brown',cex.axis=0.4)
+abline(h=5,lwd=2)
+
+boxplot(pca_norm2,main='Datos normalizados',col='brown',cex.axis=0.4)
+abline(h=5,lwd=2)
+par(mfrow=c(1,1))
+```
+
+Observamos que despues de la normalizacion los datos van del 0 al 1, por tanto, se ha realizado correctamente.
+
+Ahora renombramos la variable X y la convertimos en factor para poder trabajar con ella
+
+Tenemos que crear tantas variables binarias como clases tiene la variable X, por tanto, 5.
+
+```{r}
+
+tipoCancer <- c("ALL","AML","CLL","CML", "NoL")
+clase.f <- factor(clase$x,labels=tipoCancer)
+data7$clase <- clase.f
+
+```
+
+
+Entrenamos el 67% de los datos y probamos el 33%
+
+```{r}
+
+set.seed(12345) 
+index <- sample(nrow(data7), round(0.67*nrow(data7)))
+data_train <- data7[index,] 
+data_test <- data7[-index,] 
+
+```
+
+
+Utilizamos la funcion lineal y la RBF para crear el modelo de SVM basado en el training para predecir los cinco tipos de diagnosticos en los datos del test.
+
+
+## Step 3 – training a model on the data <a name="id14"></a>
+
+Instalar Kernlab
+
+```{r, warning=FALSE, message=FALSE}
+set.seed(1234567) 
+library(kernlab)
+model_class <- ksvm(clase ~ ., data = data_train, kernel = "vanilladot")
+model_class
+
+```
+
+## Step 4 – evaluating model performance <a name="id5"></a>
+
+Observamos las predicciones:
+
+```{r, warning=FALSE, message=FALSE}
+require(caret)
+mydata_predict1 <- predict(model_class, data_test)
+res <- table(mydata_predict1, data_test$clase)
+(conf_mat.s1 <- confusionMatrix(res))
+
+
+```
+
+## Step 5 - Improve the model <a name="id6"></a>
+
+
+**3-fold crossvalidation**
+
+```{r}
+set.seed(1234567) 
+model_sc <- train(clase ~ ., data7, method='svmLinear', 
+               trControl= trainControl(method='cv', number=3), 
+               tuneGrid= NULL, trace = FALSE)
+
+model_sc
+
+```
+
+## Discusion final <a name="id7"></a>
+
+En el Algoritmo Support Vector Machine la ventaja es que admite variables de tipo factor, asi que no hay que transformar la variable Class en variables binarias. El resultado de accuracy obtenido es de 0.9 que es el mismo que con el algoritmo de red neuronal aritificial de 5 nodos. Los resultados de probabilidad tambien se encuentran bien repartidos.
+
+Si se tiene que elegir en uno de los dos modelos se debe mirar cuales son las ventajas y desventajas de cada uno, en el caso de Algoritmo Support Vector Machine no es adecuada en grandes conjuntos pero es mas eficiente en memoria, en este caso, yo escogeria el modelo de Algoritmo Red Neuronal Artificial ya que en este problema no supone un coste computacional importante y se trata de un metodo con alta precision.
+
+
+## Referencias <a name="id8"></a>
+
+* http://www.learnbymarketing.com/tutorials/neural-networks-in-r-tutorial/
+
+* https://es.wikipedia.org/wiki/Red_neuronal_artificial
+
+* http://rstudio-pubs-static.s3.amazonaws.com/402754_6cbdea25a79d43f4895cfd7df0a8bd07.html
+
+* https://en.wikipedia.org/wiki/Support-vector_machine
+
+
+</div>
+
